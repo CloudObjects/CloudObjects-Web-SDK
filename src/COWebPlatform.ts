@@ -9,6 +9,28 @@ export class COWebPlatform {
     private appCOID : COID = null;
     private accountContext : AccountContext = null;
     private platformClient : AxiosInstance = null;
+
+    private blockPage() {
+        let blocker = document.createElement('div');
+        blocker.id = 'cowp-blocker';
+        let s = blocker.style;
+        s.position = 'fixed';
+        s.left = '0px';
+        s.right = '0px';
+        s.top = '0px';
+        s.bottom = '0px';
+        s.backgroundColor = '#000';
+        s.opacity = '0.5';
+        var body = document.getElementsByTagName('body');
+        if (body.length == 0)
+            document.documentElement.appendChild(blocker);
+        else
+            body[0].appendChild(blocker);
+    }
+
+    private unblockPage() {
+        document.getElementById('cowp-blocker').remove();
+    }
     
     constructor(appCOID : COID) {
         if (appCOID.getType() == COID_TYPE.VERSIONED || appCOID.getType() == COID_TYPE.UNVERSIONED)
@@ -89,9 +111,76 @@ export class COWebPlatform {
             return apiResponse.data;
     }
 
-    /*async signInWithPopup(identityProviderCOID : COID, credentials : Array<any>) {
+    signInWithPopup(identityProviderCOID : COID, parameters : Object) : Promise<any> {
+        let webApp = this;
+        return new Promise((resolve, reject) => {
+            webApp.signInPreCheck(identityProviderCOID);
 
-    } */
+            if (typeof(parameters) !== "object")
+                parameters = {};
+            if (!parameters.hasOwnProperty('redirect_uri'))
+                parameters['redirect_uri'] = 'https://webplatform.co-n.net/'
+                    + webApp.appCOID.getNamespace() + '/' + webApp.appCOID.getNameSegment()
+                    + '/popupCallback';
+
+            parameters['response_type'] = 'code';
+            parameters['display'] = 'popup';
+
+            webApp.blockPage();
+
+            // Open empty popup first
+            let authPopup = window.open('about:blank', 'cowp-auth-popup',
+                'left=50,top=50,width=800,height=600');
+
+            let eventListener;
+            let state : string;
+
+            // Prepare event listener
+            eventListener = (event : MessageEvent<any>) => {
+                let data = event.data.split(':');
+                if (data.count < 2 || data[0] !== 'cowpAuthPopupReturn')
+                    return;
+
+                let returnedParameters = JSON.parse(event.data.substr(20));
+                returnedParameters['state'] = state;
+                window.removeEventListener('message', eventListener);
+
+                // Attempt to complete flow            
+                this.platformClient.post('signInWithCode', returnedParameters)
+                    .then(apiResponse => {
+                        if (apiResponse.data.hasOwnProperty('type') && apiResponse.data.type == 'account') {
+                            let content = apiResponse.data.content;
+                            webApp.setSignedInWithAccountDetails(content.aauid, content.access_token);
+                            webApp.unblockPage();
+                            resolve(true);
+                        }
+                    }).catch(reason => {
+                        webApp.unblockPage();
+                        reject(reason);
+                    });
+            };
+            window.addEventListener('message', eventListener);
+
+            webApp.platformClient.post(
+                'signInWith/' + identityProviderCOID.getNamespace(),
+                parameters
+            ).then((apiResponse) => {
+                if (apiResponse.data.hasOwnProperty('provider_response')
+                        && apiResponse.data.hasOwnProperty('state')
+                        && apiResponse.data.provider_response.hasOwnProperty('redirect_uri')) {
+                    // Navigate to provider
+                    authPopup.document.location.href = apiResponse.data.provider_response.redirect_uri;
+                    state = apiResponse.data.state;
+                } else {
+                    webApp.unblockPage();
+                    reject(apiResponse.data);
+                }        
+            }).catch(reason => {
+                webApp.unblockPage();
+                reject(reason);
+            });
+        });        
+    }
 
     async signInWithCredentials(identityProviderCOID : COID, credentials : Object) : Promise<any> {
         this.signInPreCheck(identityProviderCOID);
