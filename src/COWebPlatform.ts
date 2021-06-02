@@ -141,23 +141,23 @@ export class COWebPlatform {
                 if (data.count < 2 || data[0] !== 'cowpAuthPopupReturn')
                     return;
 
-                let returnedParameters = JSON.parse(event.data.substr(20));
-                returnedParameters['state'] = state;
                 window.removeEventListener('message', eventListener);
 
                 // Attempt to complete flow            
-                this.platformClient.post('signInWithCode', returnedParameters)
-                    .then(apiResponse => {
-                        if (apiResponse.data.hasOwnProperty('type') && apiResponse.data.type == 'account') {
-                            let content = apiResponse.data.content;
-                            webApp.setSignedInWithAccountDetails(content.aauid, content.access_token);
-                            webApp.unblockPage();
-                            resolve(true);
-                        }
-                    }).catch(reason => {
+                this.platformClient.post('signInWithCode', {
+                    'enc_return_data' : event.data.substr(20),
+                    'state' : state
+                }).then(apiResponse => {
+                    if (apiResponse.data.hasOwnProperty('type') && apiResponse.data.type == 'account') {
+                        let content = apiResponse.data.content;
+                        webApp.setSignedInWithAccountDetails(content.aauid, content.access_token);
                         webApp.unblockPage();
-                        reject(reason);
-                    });
+                        resolve(true);
+                    }
+                }).catch(reason => {
+                    webApp.unblockPage();
+                    reject(reason);
+                });
             };
             window.addEventListener('message', eventListener);
 
