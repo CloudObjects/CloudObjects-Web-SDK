@@ -22,4 +22,13 @@ export class AccountContext {
 
         return this.client;
     }
+
+    getAAUID() {
+        return this.aauid;
+    }
+
+    getAccessToken() {
+        return this.accessToken;
+    }
+
 }
