@@ -172,10 +172,12 @@ export class COWebPlatform {
                     authPopup.document.location.href = apiResponse.data.provider_response.redirect_uri;
                     state = apiResponse.data.state;
                 } else {
+                    authPopup.close();
                     webApp.unblockPage();
                     reject(apiResponse.data);
                 }        
             }).catch(reason => {
+                authPopup.close();
                 webApp.unblockPage();
                 reject(reason);
             });
